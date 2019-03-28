@@ -1,0 +1,157 @@
+### Localization
+d-i debian-installer/locale string en_US.UTF-8
+d-i debian-installer/language string en_US:en
+d-i debian-installer/country string PL
+d-i keyboard-configuration/xkb-keymap select pl
+d-i keyboard-configuration/toggle select No toggling
+
+### Network configuration
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string {{HOSTNAME}}
+d-i netcfg/get_domain string {{DOMAIN}}
+d-i netcfg/wireless_wep string
+d-i hw-detect/load_firmware boolean true
+
+### Mirror settings
+d-i mirror/country string manual
+d-i mirror/http/hostname string ftp.pl.debian.org
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+d-i mirror/suite string stable
+
+### Account setup
+d-i passwd/root-login boolean {{MAKE_ROOT}}
+d-i passwd/root-password-crypted password {{ROOT_PASSWORD}}
+d-i passwd/make-user boolean {{MAKE_USER}}
+d-i passwd/username string {{USERNAME}}
+d-i passwd/user-fullname string {{FULLNAME}}
+d-i passwd/user-password-crypted password {{USER_PASSWORD}}
+
+### Clock and time zone setup
+d-i clock-setup/utc boolean true
+d-i time/zone string Europe/Warsaw
+d-i clock-setup/ntp boolean true
+
+### Partitioning
+d-i partman-auto/disk string /dev/sda
+d-i partman-auto/method string lvm
+d-i partman-md/device_remove_md boolean true
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-lvm/confirm_nooverwrite boolean true
+d-i partman-lvm/confirm boolean true
+d-i partman-auto-lvm/guided_size string max
+d-i partman-auto-lvm/new_vg_name string system
+d-i partman-auto/choose_recipe select system
+d-i partman-auto/expert_recipe string                     \
+    system ::                                             \
+            200 100 200 ext4                              \
+                    $primary{ }                           \
+                    $bootable{ }                          \
+                    method{ format }                      \
+                    format{ }                             \
+                    use_filesystem{ }                     \
+                    filesystem{ ext4 }                    \
+                    mountpoint{ /boot }                   \
+            .                                             \
+            100% 100 16000 linux-swap                     \
+                    $lvmok{ }                             \
+                    lv_name{ swap }                       \
+                    in_vg { system }                      \
+                    method{ swap }                        \
+                    format{ }                             \
+            .                                             \
+            500 100 8000 ext4                             \
+                    $lvmok{ }                             \
+                    lv_name{ log }                        \
+                    in_vg { system }                      \
+                    method{ format }                      \
+                    format{ }                             \
+                    use_filesystem{ }                     \
+                    filesystem{ ext4 }                    \
+                    mountpoint{ /var/log }                \
+            .                                             \
+            500 100 8000 ext4                             \
+                    $lvmok{ }                             \
+                    lv_name{ tmp }                        \
+                    in_vg { system }                      \
+                    method{ format }                      \
+                    format{ }                             \
+                    use_filesystem{ }                     \
+                    filesystem{ ext4 }                    \
+                    mountpoint{ /var/tmp }                \
+            .                                             \
+            2000 100 -1 ext4                              \
+                    $lvmok{ }                             \
+                    lv_name{ var }                        \
+                    in_vg { system }                      \
+                    method{ format }                      \
+                    format{ }                             \
+                    use_filesystem{ }                     \
+                    filesystem{ ext4 }                    \
+                    mountpoint{ /var }                    \
+            .                                             \
+            2000 100 16000 ext4                           \
+                    $lvmok{ }                             \
+                    lv_name{ root }                       \
+                    in_vg { system }                      \
+                    method{ format }                      \
+                    format{ }                             \
+                    use_filesystem{ }                     \
+                    filesystem{ ext4 }                    \
+                    mountpoint{ / }                       \
+            .                                             \
+            2000 100 8000 ext4                            \
+                    $lvmok{ }                             \
+                    lv_name{ home }                       \
+                    in_vg { system }                      \
+                    method{ format }                      \
+                    format{ }                             \
+                    use_filesystem{ }                     \
+                    filesystem{ ext4 }                    \
+                    mountpoint{ /home }                   \
+            .
+
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm_nooverwrite boolean true
+d-i partman/confirm boolean true
+d-i preseed/late_command string                           \
+  in-target rm --recursive /tmp ;                         \
+  in-target ln --symbolic  /var/tmp /tmp ;
+ 
+### Base system installation
+d-i base-installer/install-recommends boolean true
+d-i base-installer/kernel/image string linux-image-amd64
+
+### Apt setup
+d-i apt-setup/non-free boolean true
+d-i apt-setup/contrib boolean true
+d-i apt-setup/use_mirror boolean true
+d-i apt-setup/cdrom/set-first boolean false
+d-i apt-setup/cdrom/set-next boolean false
+d-i apt-setup/cdrom/set-double boolean false
+
+### Package selection
+tasksel tasksel/first multiselect standard
+d-i pkgsel/upgrade select full-upgrade
+popularity-contest popularity-contest/participate boolean false
+
+### Boot loader installation
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/with_other_os boolean false
+d-i grub-installer/bootdev string /dev/sda
+
+### Finishing up the installation
+d-i finish-install/reboot_in_progress note
+
+### Post-install script to do all the remaining work
+#d-i preseed/late_command string                       \
+#  mkdir --parents /target/root/setup ;  \
+#  cp /cdrom/custom/attachment /target/root/setup ;  \
+#  in-target cd /root/setup ;          
+#  in-target {{EXTRACT}} attachment;       \
+#  in-target rm attachment;       \
+#  in-target chmod +x /root/custom/setup ;             \
+3  in-target /bin/bash /root/custom/setup ;            \
+#  in-target rm --recursive /root/custom ;
+#
