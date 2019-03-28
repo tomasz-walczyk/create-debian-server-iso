@@ -2,10 +2,10 @@ Creates unattended Debian server installer.
 ___
 ### LINUX
 Script will create Debian server installer from the latest minimal CD available.
-This can be changed by specifying --source-url and --iso-name-pattern arguments.
-Files will be saved to the script directory unless --output-dir was specified.
+This can be changed by specifying `--source-url` and `--iso-name-pattern` arguments.
+Files will be saved to the script directory unless `--output-dir` was specified.
 All parameters are optional but missing configuration needs to provided during
-server installation. Installer will use first SCSI/SATA hard disk (/dev/sda).
+server installation. Installer will use first SCSI/SATA hard disk (`/dev/sda`).
 #### Setup:
 ```bash
 git clone https://github.com/tomasz-walczyk/create-debian-server-iso.git
@@ -14,7 +14,7 @@ chmod +x create-debian-server-iso.bash
 ```
 #### Create installer:
 ```bash
-sudo ./create-debian-server-iso.bash --encrypt --key-password READ --account-password READ --hostname <HOSTNAME> --domain <DOMAIN> --output-dir <PATH>
+./create-debian-server-iso.bash --encrypt --key-password READ --account-password READ --hostname <HOSTNAME> --domain <DOMAIN> --output-dir <PATH>
 ```
 #### Display help:
 ```bash
@@ -23,10 +23,10 @@ sudo ./create-debian-server-iso.bash --encrypt --key-password READ --account-pas
 ___
 ### WINDOWS
 Script will create Debian server installer from the latest minimal CD available.
-This can be changed by specifying -SourceURL and -ISONamePattern arguments.
-Files will be saved to the script directory unless -OutputDir was specified.
+This can be changed by specifying `-SourceURL` and `-ISONamePattern` arguments.
+Files will be saved to the script directory unless `-OutputDir` was specified.
 All parameters are optional but missing configuration needs to provided during
-server installation. Installer will use first SCSI/SATA hard disk (/dev/sda).
+server installation. Installer will use first SCSI/SATA hard disk (`/dev/sda`).
 #### Setup:
 ```powershell
 git clone https://github.com/tomasz-walczyk/create-debian-server-iso.git
