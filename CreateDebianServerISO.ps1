@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 Tomasz Walczyk
+# Copyright (C) 2019 Tomasz Walczyk
 #
 # This software may be modified and distributed under the terms
 # of the MIT license. See the LICENSE file for details.
@@ -8,133 +8,106 @@
 
 <#
 .SYNOPSIS
-    Creates unattended Debian server installer.
+  Creates unattended Debian server installer.
 .DESCRIPTION
-    Script will create Debian server installer from the latest minimal CD available.
-    This can be changed by specifying -SourceURL and ISONamePattern arguments.
-    Files will be saved to the script directory unless -OutputDir was specified.
-    All parameters are optional but missing configuration needs to provided during 
-    server installation. Encryption password cannot be preconfigured.
-
-    Warnings:
-    [1] Installer will automatically use the first SCSI/SATA hard disk (/dev/sda).
-    [2] Storing unencrypted SSH key is not secure!
-    [3] Passing password as a command line argument is not secure!
-    [4] Generation a of random password is not secure!
-    [5] Sensitive information may be stored in the output directory!
+  Script will create Debian server installer from the latest minimal CD available.
+  This can be changed by specifying -SourceURL and -ISONamePattern arguments.
+  Files will be saved to the script directory unless -OutputDir was specified.
+  All parameters are optional but missing configuration needs to provided during
+  server installation. Installer will use first SCSI/SATA hard disk (/dev/sda).
 .INPUTS
-    None.
+  None.
 .OUTPUTS
-    None.
+  None.
 .LINK
-    https://bitbucket.org/twalczyk/create-debian-server-iso
+  https://github.com/tomasz-walczyk/create-debian-server-iso
 .LINK
-    https://bitbucket.org/twalczyk/setup-debian-server"
+  https://github.com/tomasz-walczyk/create-debian-iso
 .LINK
-    https://bitbucket.org/twalczyk/create-debian-iso"
-.LINK
-    https://bitbucket.org/twalczyk/mkpasswd-win
+  https://github.com/tomasz-walczyk/windows-mkpasswd
 #>
 [CmdletBinding(PositionalBinding=$False)]
 param (
-    # Administrator SSH key password.
-    # Supported values:
-    # - RAND) : Generate random password.
-    # - READ) : Read password from standard input.
-    # - *)    : Use argument value as a password.
-    [Parameter()]
-    [ValidateScript({
-        return (($_.length -gt 4 -and $_.length -lt 128) -or ($_ -eq "RAND") -or ($_ -eq "READ") -or (-not $_))
-    })]
-    [Alias("K")]
-    [String]
-    $KeyPassword,
+  # Root SSH key password.
+  # Supported values:
+  # - RAND) : Generate random password.
+  # - READ) : Read password from standard input.
+  # - *)    : Use argument value as a password.
+  [Parameter()]
+  [ValidateScript({
+    return (($_.length -gt 4 -and $_.length -lt 128) -or ($_ -eq "RAND") -or ($_ -eq "READ") -or (-not $_))
+  })]
+  [Alias("K")]
+  [String]
+  $KeyPassword,
 
-    # Administrator account password.
-    # Supported values:
-    # - RAND) : Generate random password.
-    # - READ) : Read password from standard input.
-    # - *)    : Use argument value as a password.
-    [Parameter()]
-    [ValidateScript({
-        return (($_.length -gt 4 -and $_.length -lt 128) -or ($_ -eq "RAND") -or ($_ -eq "READ") -or (-not $_))
-    })]
-    [Alias("A")]
-    [String]
-    $AccountPassword,
+  # Root account password.
+  # Supported values:
+  # - RAND) : Generate random password.
+  # - READ) : Read password from standard input.
+  # - *)    : Use argument value as a password.
+  [Parameter()]
+  [ValidateScript({
+    return (($_.length -gt 4 -and $_.length -lt 128) -or ($_ -eq "RAND") -or ($_ -eq "READ") -or (-not $_))
+  })]
+  [Alias("A")]
+  [String]
+  $AccountPassword,
 
-    # Enable full disk encryption.
-    [Parameter()]
-    [Alias("E")]
-    [Switch]
-    $Encrypt,
+  # Enable full disk encryption.
+  [Parameter()]
+  [Alias("E")]
+  [Switch]
+  $Encrypt,
 
-    # Administrator account username.
-    [Parameter()]
-    [ValidateScript({
-        $Path=Join-Path (Join-Path $PSScriptRoot "data") "reserved-usernames.txt"
-        return ($_ -match "^[a-z_][a-z0-9_]{0,30}$") 
-        -and ((Get-Content $Path | Select-String -pattern "^$_$").count -eq 0)
-    })]
-    [Alias("U")]
-    [String]
-    $Username,
+  # Server hostname.
+  [Parameter()]
+  [ValidatePattern("^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$")]
+  [Alias("H")]
+  [String]
+  $Hostname,
 
-    # Full name of the administrator account.
-    [Parameter()]
-    [ValidatePattern("^[a-zA-Z0-9 _-]{0,63}$")]
-    [Alias("F")]
-    [String]
-    $Fullname,
+  # Server domain.
+  [Parameter()]
+  [ValidatePattern("^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]$")]
+  [Alias("D")]
+  [String]
+  $Domain,
 
-    # Server hostname.
-    [Parameter()]
-    [ValidatePattern("^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$")]
-    [Alias("H")]
-    [String]
-    $Hostname,
+  # Path to the output directory.
+  [Parameter()]
+  [ValidateScript({
+    $Path=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($_)
+    if (Test-Path $Path) {
+      return (Test-Path $Path -PathType Container) -and ((Get-ChildItem $Path | Measure-Object).Count -eq 0)
+    } else {
+      return (Split-Path $Path | Test-Path -PathType Container)
+    }
+  })]
+  [Alias("O")]
+  [String]
+  $OutputDir=(Join-Path $PSScriptRoot (Get-Date -UFormat "debian-server_%Y-%m-%d_%H-%M-%S")),
 
-    # Server domain.
-    [Parameter()]
-    [ValidatePattern("^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]$")]
-    [Alias("D")]
-    [String]
-    $Domain,
+  # Source URL from where ISO should be downloaded.
+  [Parameter()]
+  [ValidateNotNullOrEmpty()]
+  [Alias("S")]
+  [String]
+  $SourceURL,
 
-    # Path to the output directory.
-    [Parameter()]
-    [ValidateScript({
-        $Path=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($_)
-        if (Test-Path $Path) {
-            return (Test-Path $Path -PathType Container) -and ((Get-ChildItem $Path | Measure-Object).Count -eq 0)
-        } else {
-            return (Split-Path $Path | Test-Path -PathType Container)
-        }
-    })]
-    [Alias("O")]
-    [String]
-    $OutputDir=(Join-Path "C:\Users\Tomek\Desktop\test" (Get-Date -UFormat "debian-server_%Y-%m-%d_%H-%M-%S")),
+  # Regular expression for selecting ISO file.
+  [Parameter()]
+  [ValidateNotNullOrEmpty()]
+  [Alias("I")]
+  [String]
+  $ISONamePattern,
 
-    # Source URL from where ISO should be downloaded.
-    [Parameter()]
-    [ValidateNotNullOrEmpty()]
-    [Alias("S")]
-    [String]
-    $SourceURL,
-
-    # Regular expression for selecting ISO file.
-    [Parameter()]
-    [ValidateNotNullOrEmpty()]
-    [Alias("I")]
-    [String]
-    $ISONamePattern,
-
-    # Additional installer boot flags.
-    [Parameter()]
-    [ValidateNotNullOrEmpty()]
-    [Alias("B")]
-    [String]
-    $BootFlags
+  # Additional installer boot flags.
+  [Parameter()]
+  [ValidateNotNullOrEmpty()]
+  [Alias("B")]
+  [String]
+  $BootFlags
 )
 
 ###########################################################
@@ -167,246 +140,246 @@ function Join-Paths([String[]]$Paths) {
 
 ###########################################################
 
-$DirToRemoveOnExit=$Null
+$TempDir=New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item $_ -ItemType Directory }
 
 ###########################################################
 
-try 
-{
-    #------------------------------------------------------
-    # Define all needed files and directories.
-    #------------------------------------------------------
+# try 
+# {
+#     #------------------------------------------------------
+#     # Define all needed files and directories.
+#     #------------------------------------------------------
 
-    $KeyType="RSA"
-    $KeyBits=4092
-    $MinPasswordLength=5
-    $MaxPasswordLength=127
-    $RandPasswordLength=32
+#     $KeyType="RSA"
+#     $KeyBits=4092
+#     $MinPasswordLength=5
+#     $MaxPasswordLength=127
+#     $RandPasswordLength=32
 
-    $HostLabel=if ($Hostname) { $Hostname } else { "server" }
-    $UserLabel=if ($Username) { $Username } else { "root" }
+#     $HostLabel=if ($Hostname) { $Hostname } else { "server" }
+#     $UserLabel=if ($Username) { $Username } else { "root" }
 
-    $ISOFile=Join-Paths $OutputDir,"$HostLabel.iso"
-    $PreseedFile=Join-Paths $OutputDir,"$HostLabel.seed"
-    $AttachmentDir=Join-Paths $OutputDir,"$HostLabel"
-    $AttachmentFile=Join-Paths $OutputDir,"$HostLabel.tar.gz"
-    $PasswordsFile=Join-Paths $OutputDir,"$UserLabel@$HostLabel.pass"
-    $PrivateKeyFile=Join-Paths $OutputDir,"$UserLabel@$HostLabel"
-    $PublicKeyFile=Join-Paths $OutputDir,"$UserLabel@$HostLabel.pub"
+#     $ISOFile=Join-Paths $OutputDir,"$HostLabel.iso"
+#     $PreseedFile=Join-Paths $OutputDir,"$HostLabel.seed"
+#     $AttachmentDir=Join-Paths $OutputDir,"$HostLabel"
+#     $AttachmentFile=Join-Paths $OutputDir,"$HostLabel.tar.gz"
+#     $PasswordsFile=Join-Paths $OutputDir,"$UserLabel@$HostLabel.pass"
+#     $PrivateKeyFile=Join-Paths $OutputDir,"$UserLabel@$HostLabel"
+#     $PublicKeyFile=Join-Paths $OutputDir,"$UserLabel@$HostLabel.pub"
 
-    #------------------------------------------------------
-    # Configure output directory.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure output directory.
+#     #------------------------------------------------------
 
-    $DirToRemoveOnExit=$OutputDir
+#     $DirToRemoveOnExit=$OutputDir
 
-    if (-not (Test-Path $OutputDir)) {
-        $Path=New-Item $OutputDir -ItemType Directory
-    }
+#     if (-not (Test-Path $OutputDir)) {
+#         $Path=New-Item $OutputDir -ItemType Directory
+#     }
 
-    if (-not (Test-Path $AttachmentDir)) {
-        $Path=New-Item $AttachmentDir -ItemType Directory
-    }
+#     if (-not (Test-Path $AttachmentDir)) {
+#         $Path=New-Item $AttachmentDir -ItemType Directory
+#     }
 
-    #------------------------------------------------------
-    # Configure full disk encryption.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure full disk encryption.
+#     #------------------------------------------------------
 
-    if ($Encrypt) {
-        Copy-Item (Join-Paths $PSScriptRoot,"data","debian-server-crypt.seed") $PreseedFile
-    } else {
-        Copy-Item (Join-Paths $PSScriptRoot,"data","debian-server.seed") $PreseedFile
-    }
+#     if ($Encrypt) {
+#         Copy-Item (Join-Paths $PSScriptRoot,"data","debian-server-crypt.seed") $PreseedFile
+#     } else {
+#         Copy-Item (Join-Paths $PSScriptRoot,"data","debian-server.seed") $PreseedFile
+#     }
 
-    #------------------------------------------------------
-    # Configure hostname.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure hostname.
+#     #------------------------------------------------------
 
-    if ($Hostname) {
-        (Get-Content $PreseedFile).replace("{{HOSTNAME}}", $Hostname) | Set-Content $PreseedFile
-    } else {
-        (Get-Content $PreseedFile) | Select-String -pattern "{{HOSTNAME}}" -notmatch | Set-Content $PreseedFile
-    }
+#     if ($Hostname) {
+#         (Get-Content $PreseedFile).replace("{{HOSTNAME}}", $Hostname) | Set-Content $PreseedFile
+#     } else {
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{HOSTNAME}}" -notmatch | Set-Content $PreseedFile
+#     }
 
-    #------------------------------------------------------
-    # Configure domain.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure domain.
+#     #------------------------------------------------------
 
-    if ($Domain) {
-        (Get-Content $PreseedFile).replace("{{DOMAIN}}", $Domain) | Set-Content $PreseedFile
-    } else {
-        (Get-Content $PreseedFile) | Select-String -pattern "{{DOMAIN}}" -notmatch | Set-Content $PreseedFile
-    }
+#     if ($Domain) {
+#         (Get-Content $PreseedFile).replace("{{DOMAIN}}", $Domain) | Set-Content $PreseedFile
+#     } else {
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{DOMAIN}}" -notmatch | Set-Content $PreseedFile
+#     }
 
-    #------------------------------------------------------
-    # Configure account details.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure account details.
+#     #------------------------------------------------------
 
-    if ($Username) {
-        (Get-Content $PreseedFile).replace("{{MAKE_ROOT}}", "false") | Set-Content $PreseedFile
-        (Get-Content $PreseedFile).replace("{{MAKE_USER}}", "true") | Set-Content $PreseedFile
-        (Get-Content $PreseedFile).replace("{{USERNAME}}", $Username) | Set-Content $PreseedFile
-        (Get-Content $PreseedFile).replace("{{FULLNAME}}", $Fullname) | Set-Content $PreseedFile
-        (Get-Content $PreseedFile).replace("{{USER_PASSWORD}}", "{{PASSWORD}}") | Set-Content $PreseedFile
-        (Get-Content $PreseedFile) | Select-String -pattern "{{ROOT_PASSWORD}}" -notmatch | Set-Content $PreseedFile
-    } else {
-        (Get-Content $PreseedFile).replace("{{MAKE_ROOT}}", "true") | Set-Content $PreseedFile
-        (Get-Content $PreseedFile).replace("{{MAKE_USER}}", "false") | Set-Content $PreseedFile
-        (Get-Content $PreseedFile).replace("{{ROOT_PASSWORD}}", "{{PASSWORD}}") | Set-Content $PreseedFile
-        (Get-Content $PreseedFile) | Select-String -pattern "{{USERNAME}}" -notmatch | Set-Content $PreseedFile
-        (Get-Content $PreseedFile) | Select-String -pattern "{{FULLNAME}}" -notmatch | Set-Content $PreseedFile
-        (Get-Content $PreseedFile) | Select-String -pattern "{{USER_PASSWORD}}" -notmatch | Set-Content $PreseedFile
-    }
+#     if ($Username) {
+#         (Get-Content $PreseedFile).replace("{{MAKE_ROOT}}", "false") | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile).replace("{{MAKE_USER}}", "true") | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile).replace("{{USERNAME}}", $Username) | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile).replace("{{FULLNAME}}", $Fullname) | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile).replace("{{USER_PASSWORD}}", "{{PASSWORD}}") | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{ROOT_PASSWORD}}" -notmatch | Set-Content $PreseedFile
+#     } else {
+#         (Get-Content $PreseedFile).replace("{{MAKE_ROOT}}", "true") | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile).replace("{{MAKE_USER}}", "false") | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile).replace("{{ROOT_PASSWORD}}", "{{PASSWORD}}") | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{USERNAME}}" -notmatch | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{FULLNAME}}" -notmatch | Set-Content $PreseedFile
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{USER_PASSWORD}}" -notmatch | Set-Content $PreseedFile
+#     }
 
-    #------------------------------------------------------
-    # Configure account password.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure account password.
+#     #------------------------------------------------------
 
-    if ($AccountPassword -eq "READ") {
-        Write-Host ""
-        Write-Host "+-----------------------------------------------+"
-        Write-Host "|         Account password configuration        |"
-        Write-Host "+-----------------------------------------------+"
-        Write-Host ""
+#     if ($AccountPassword -eq "READ") {
+#         Write-Host ""
+#         Write-Host "+-----------------------------------------------+"
+#         Write-Host "|         Account password configuration        |"
+#         Write-Host "+-----------------------------------------------+"
+#         Write-Host ""
 
-        while ($True) {
-            $Password1=Read-Host -Prompt "Enter passphrase (empty for no passphrase)" -AsSecureString
-            $Password2=Read-Host -Prompt "Enter same passphrase again" -AsSecureString
+#         while ($True) {
+#             $Password1=Read-Host -Prompt "Enter passphrase (empty for no passphrase)" -AsSecureString
+#             $Password2=Read-Host -Prompt "Enter same passphrase again" -AsSecureString
 
-            $Password1=[System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password1))
-            $Password2=[System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password2))
+#             $Password1=[System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password1))
+#             $Password2=[System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password2))
 
-            if ($Password1 -ne $Password2) {
-                Write-Host "Passphrases do not match.  Try again."
-            } elseif ($Password1.length -gt 0 -and $Password1.length -lt $MinPasswordLength) {
-                Write-Host "Passphrase is too short (minimum $MinPasswordLength characters).  Try again."
-            } elseif ($Password1.length -gt $MaxPasswordLength) {
-                Write-Host "Passphrase is too long (maximum $MaxPasswordLength characters).  Try again."
-            } else {
-                $AccountPassword=$Password1
-                $Password1=$Null
-                $Password2=$Null
-                break
-            }
-        }
-    } elseif ($AccountPassword -eq "RAND") {
-        $AccountPassword=(New-RandomPassword $RandPasswordLength)
-        "Login   : $AccountPassword"| Out-File $PasswordsFile -Append
-    }
+#             if ($Password1 -ne $Password2) {
+#                 Write-Host "Passphrases do not match.  Try again."
+#             } elseif ($Password1.length -gt 0 -and $Password1.length -lt $MinPasswordLength) {
+#                 Write-Host "Passphrase is too short (minimum $MinPasswordLength characters).  Try again."
+#             } elseif ($Password1.length -gt $MaxPasswordLength) {
+#                 Write-Host "Passphrase is too long (maximum $MaxPasswordLength characters).  Try again."
+#             } else {
+#                 $AccountPassword=$Password1
+#                 $Password1=$Null
+#                 $Password2=$Null
+#                 break
+#             }
+#         }
+#     } elseif ($AccountPassword -eq "RAND") {
+#         $AccountPassword=(New-RandomPassword $RandPasswordLength)
+#         "Login   : $AccountPassword"| Out-File $PasswordsFile -Append
+#     }
 
-    if ($AccountPassword) {
-        $mkpasswd=Join-Paths $PSScriptRoot,"data","mkpasswd-win","release","bin","mkpasswd-win.exe"
-        $PasswordHash=($AccountPassword | & $mkpasswd)
-        if ($LastExitCode -ne 0) {
-            throw "Command 'mkpasswd' failed with exit code: $LastExitCode"
-        }
-        (Get-Content $PreseedFile).replace("{{PASSWORD}}", $PasswordHash) | Set-Content $PreseedFile
-    } else {
-        (Get-Content $PreseedFile) | Select-String -pattern "{{PASSWORD}}" -notmatch | Set-Content $PreseedFile
-    }
+#     if ($AccountPassword) {
+#         $mkpasswd=Join-Paths $PSScriptRoot,"data","mkpasswd-win","release","bin","mkpasswd-win.exe"
+#         $PasswordHash=($AccountPassword | & $mkpasswd)
+#         if ($LastExitCode -ne 0) {
+#             throw "Command 'mkpasswd' failed with exit code: $LastExitCode"
+#         }
+#         (Get-Content $PreseedFile).replace("{{PASSWORD}}", $PasswordHash) | Set-Content $PreseedFile
+#     } else {
+#         (Get-Content $PreseedFile) | Select-String -pattern "{{PASSWORD}}" -notmatch | Set-Content $PreseedFile
+#     }
 
-    $AccountPassword=$Null
+#     $AccountPassword=$Null
 
-    #------------------------------------------------------
-    # Configure remote access.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure remote access.
+#     #------------------------------------------------------
 
-    if ($KeyPassword -eq "READ") {
-        Write-Host ""
-        Write-Host "+-----------------------------------------------+"
-        Write-Host "|        SSH key password configuration         |"
-        Write-Host "+-----------------------------------------------+"
-        Write-Host ""
+#     if ($KeyPassword -eq "READ") {
+#         Write-Host ""
+#         Write-Host "+-----------------------------------------------+"
+#         Write-Host "|        SSH key password configuration         |"
+#         Write-Host "+-----------------------------------------------+"
+#         Write-Host ""
 
-        while ($True) {
-            & ssh-keygen -q -t $KeyType -b $KeyBits -f $PrivateKeyFile -C "$UserLabel@$HostLabel" 2> $Null
-            if ($LastExitCode -ne 0) {
-                Write-Host "Passphrase is too short (minimum $MinPasswordLength characters).  Try again."
-            } else {
-                Copy-Item $PublicKeyFile $AttachmentDir
-                break
-            }
-        }
-    } elseif ($KeyPassword) {
-        if ($KeyPassword -eq "RAND") {
-            $KeyPassword=(New-RandomPassword $RandPasswordLength)
-            "SSH Key : $KeyPassword" | Out-File $PasswordsFile -Append
-        }
+#         while ($True) {
+#             & ssh-keygen -q -t $KeyType -b $KeyBits -f $PrivateKeyFile -C "$UserLabel@$HostLabel" 2> $Null
+#             if ($LastExitCode -ne 0) {
+#                 Write-Host "Passphrase is too short (minimum $MinPasswordLength characters).  Try again."
+#             } else {
+#                 Copy-Item $PublicKeyFile $AttachmentDir
+#                 break
+#             }
+#         }
+#     } elseif ($KeyPassword) {
+#         if ($KeyPassword -eq "RAND") {
+#             $KeyPassword=(New-RandomPassword $RandPasswordLength)
+#             "SSH Key : $KeyPassword" | Out-File $PasswordsFile -Append
+#         }
 
-        & ssh-keygen -q -t $KeyType -b $KeyBits -f $PrivateKeyFile -N "$KeyPassword" -C "$UserLabel@$HostLabel"
-        if ($LastExitCode -ne 0) {
-            throw "Command 'ssh-keygen' failed with exit code: $LastExitCode"
-        } 
-        Copy-Item $PublicKeyFile $AttachmentDir
-    }
+#         & ssh-keygen -q -t $KeyType -b $KeyBits -f $PrivateKeyFile -N "$KeyPassword" -C "$UserLabel@$HostLabel"
+#         if ($LastExitCode -ne 0) {
+#             throw "Command 'ssh-keygen' failed with exit code: $LastExitCode"
+#         } 
+#         Copy-Item $PublicKeyFile $AttachmentDir
+#     }
 
-    $KeyPassword=$Null
+#     $KeyPassword=$Null
 
-    #------------------------------------------------------
-    # Configure setup script.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Configure setup script.
+#     #------------------------------------------------------
 
-    Copy-Item (Join-Paths $PSScriptRoot,"data","setup.sh") $AttachmentDir
+#     Copy-Item (Join-Paths $PSScriptRoot,"data","setup.sh") $AttachmentDir
 
-    #------------------------------------------------------
-    # Calculate attachments checksums.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Calculate attachments checksums.
+#     #------------------------------------------------------
 
-    $AttachmentDirHash=Get-ChildItem $AttachmentDir -Recurse | Where-Object { Test-Path $_.FullName -PathType Leaf } | Get-FileHash -Algorithm SHA512
-    foreach ($Hash in $AttachmentDirHash) {
-        $Hash.Hash.ToLower() + "  " + $Hash.Path.Replace($AttachmentDir,"").Replace("\", "") | Out-File (Join-Paths $AttachmentDir,"SHA512SUMS") -Append
-    }
+#     $AttachmentDirHash=Get-ChildItem $AttachmentDir -Recurse | Where-Object { Test-Path $_.FullName -PathType Leaf } | Get-FileHash -Algorithm SHA512
+#     foreach ($Hash in $AttachmentDirHash) {
+#         $Hash.Hash.ToLower() + "  " + $Hash.Path.Replace($AttachmentDir,"").Replace("\", "") | Out-File (Join-Paths $AttachmentDir,"SHA512SUMS") -Append
+#     }
 
-    #------------------------------------------------------
-    # Create attachments archive.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Create attachments archive.
+#     #------------------------------------------------------
 
-    Push-Location $AttachmentDir
-    $7zip=Join-Paths $PSScriptRoot,"data","7zip","7z.exe"
-    & $7zip a -ttar -so "tmp.tar" * | & $7zip a -si $AttachmentFile 2>&1 > $Null
-    if ($LastExitCode -ne 0) {
-        throw "Command '7zip' failed with exit code: $LastExitCode"
-    }
-    Pop-Location
-    Remove-Item $AttachmentDir -Recurse
+#     Push-Location $AttachmentDir
+#     $7zip=Join-Paths $PSScriptRoot,"data","7zip","7z.exe"
+#     & $7zip a -ttar -so "tmp.tar" * | & $7zip a -si $AttachmentFile 2>&1 > $Null
+#     if ($LastExitCode -ne 0) {
+#         throw "Command '7zip' failed with exit code: $LastExitCode"
+#     }
+#     Pop-Location
+#     Remove-Item $AttachmentDir -Recurse
 
-    #------------------------------------------------------
-    # Create debian server ISO.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Create debian server ISO.
+#     #------------------------------------------------------
 
-    Write-Host ""
-    Write-Host "+-----------------------------------------------+"
-    Write-Host "|           Creating server installer           |"
-    Write-Host "+-----------------------------------------------+"
-    Write-Host ""
+#     Write-Host ""
+#     Write-Host "+-----------------------------------------------+"
+#     Write-Host "|           Creating server installer           |"
+#     Write-Host "+-----------------------------------------------+"
+#     Write-Host ""
 
-    $CreateDebianISO=Join-Paths $PSScriptRoot,"data","create-debian-iso","CreateDebianISO.ps1"
-    $CreateDebianISO+=" -PreseedFile `"$PreseedFile`""
-    $CreateDebianISO+=" -AttachmentFile `"$AttachmentFile`""
-    $CreateDebianISO+=" -OutputFile `"$ISOFile`""
-    if ($SourceURL) { $CreateDebianISO+=" -SourceURL `"$SourceURL`"" }
-    if ($BootFlags) { $CreateDebianISO+=" -BootFlags `"$BootFlags`"" }
-    if ($ISONamePattern) { $CreateDebianISO+=" -ISONamePattern `"$ISONamePattern`"" }
-    Invoke-Expression $CreateDebianISO
+#     $CreateDebianISO=Join-Paths $PSScriptRoot,"data","create-debian-iso","CreateDebianISO.ps1"
+#     $CreateDebianISO+=" -PreseedFile `"$PreseedFile`""
+#     $CreateDebianISO+=" -AttachmentFile `"$AttachmentFile`""
+#     $CreateDebianISO+=" -OutputFile `"$ISOFile`""
+#     if ($SourceURL) { $CreateDebianISO+=" -SourceURL `"$SourceURL`"" }
+#     if ($BootFlags) { $CreateDebianISO+=" -BootFlags `"$BootFlags`"" }
+#     if ($ISONamePattern) { $CreateDebianISO+=" -ISONamePattern `"$ISONamePattern`"" }
+#     Invoke-Expression $CreateDebianISO
 
-    #------------------------------------------------------
-    # Calculate output files checksums.
-    #------------------------------------------------------
+#     #------------------------------------------------------
+#     # Calculate output files checksums.
+#     #------------------------------------------------------
 
-    $OutputDirHash=Get-ChildItem $OutputDir -Recurse | Where-Object { Test-Path $_.FullName -PathType Leaf } | Get-FileHash -Algorithm SHA512
-    foreach ($Hash in $OutputDirHash) {
-        $Hash.Hash.ToLower() + "  " + $Hash.Path.Replace($OutputDir,"").Replace("\", "") | Out-File (Join-Paths $OutputDir,"SHA512SUMS") -Append
-    }
+#     $OutputDirHash=Get-ChildItem $OutputDir -Recurse | Where-Object { Test-Path $_.FullName -PathType Leaf } | Get-FileHash -Algorithm SHA512
+#     foreach ($Hash in $OutputDirHash) {
+#         $Hash.Hash.ToLower() + "  " + $Hash.Path.Replace($OutputDir,"").Replace("\", "") | Out-File (Join-Paths $OutputDir,"SHA512SUMS") -Append
+#     }
 
-    $DirToRemoveOnExit=$Null
-}
-catch 
-{
-    Write-Error $_.Exception.Message
-}
-finally
-{
-    if ($DirToRemoveOnExit -and (Test-Path $DirToRemoveOnExit)) {
-        Remove-Item $DirToRemoveOnExit -Force -Recurse
-    }
-}
+#     $DirToRemoveOnExit=$Null
+# }
+# catch 
+# {
+#     Write-Error $_.Exception.Message
+# }
+# finally
+# {
+#     if ($DirToRemoveOnExit -and (Test-Path $DirToRemoveOnExit)) {
+#         Remove-Item $DirToRemoveOnExit -Force -Recurse
+#     }
+# }

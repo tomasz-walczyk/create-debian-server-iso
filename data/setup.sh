@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-echo "TEST" > /var/log/setup.txt
+echo "Hello World!" > /var/log/setup.txt

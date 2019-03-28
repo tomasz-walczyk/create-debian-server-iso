@@ -20,12 +20,9 @@ d-i mirror/http/proxy string
 d-i mirror/suite string stable
 
 ### Account setup
-d-i passwd/root-login boolean {{MAKE_ROOT}}
-d-i passwd/root-password-crypted password {{ROOT_PASSWORD}}
-d-i passwd/make-user boolean {{MAKE_USER}}
-d-i passwd/username string {{USERNAME}}
-d-i passwd/user-fullname string {{FULLNAME}}
-d-i passwd/user-password-crypted password {{USER_PASSWORD}}
+d-i passwd/make-user boolean false
+d-i passwd/root-login boolean true
+d-i passwd/root-password-crypted password {{PASSWORD}}
 
 ### Clock and time zone setup
 d-i clock-setup/utc boolean true
@@ -132,7 +129,7 @@ d-i apt-setup/cdrom/set-next boolean false
 d-i apt-setup/cdrom/set-double boolean false
 
 ### Package selection
-tasksel tasksel/first multiselect standard
+tasksel tasksel/first multiselect ssh-server
 d-i pkgsel/upgrade select full-upgrade
 popularity-contest popularity-contest/participate boolean false
 
@@ -143,15 +140,3 @@ d-i grub-installer/bootdev string /dev/sda
 
 ### Finishing up the installation
 d-i finish-install/reboot_in_progress note
-
-### Post-install script to do all the remaining work
-#d-i preseed/late_command string                       \
-#  mkdir --parents /target/root/setup ;  \
-#  cp /cdrom/custom/attachment /target/root/setup ;  \
-#  in-target cd /root/setup ;          
-#  in-target {{EXTRACT}} attachment;       \
-#  in-target rm attachment;       \
-#  in-target chmod +x /root/custom/setup ;             \
-3  in-target /bin/bash /root/custom/setup ;            \
-#  in-target rm --recursive /root/custom ;
-#
