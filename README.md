@@ -14,7 +14,7 @@ chmod +x create-debian-server-iso.bash
 ```
 #### Create installer:
 ```bash
-./create-debian-server-iso.bash --encrypt --key-password READ --account-password READ --hostname <HOSTNAME> --domain <DOMAIN> --output-dir <PATH>
+./create-debian-server-iso.bash --encrypt --key-password READ --account-password READ --hostname "<hostname>" --domain "<domain>" --output-dir "<path>"
 ```
 #### Display help:
 ```bash
@@ -35,7 +35,7 @@ Set-ExecutionPolicy Bypass -Scope Process
 ```
 #### Create installer:
 ```powershell
-.\CreateDebianServerISO.ps1 -Encrypt -KeyPassword READ -AccountPassword READ -Hostname <HOSTNAME> -Domain <DOMAIN> -OutputDir <PATH>
+.\CreateDebianServerISO.ps1 -Encrypt -KeyPassword READ -AccountPassword READ -Hostname "<hostname>" -Domain "<domain>" -OutputDir "<path>"
 ```
 #### Display help:
 ```powershell
