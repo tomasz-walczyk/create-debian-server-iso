@@ -75,6 +75,40 @@ Clean() {
 
 #----------------------------------------------------------
 
+DownloadDependency() {
+
+}
+CreateDebianISO="v0.0.4"
+CreateDebianISOVersion="0.0.4"
+CreateDebianISORepository="create-debian-iso"
+
+wget --quiet --output-document="${TempDir}" "https://github.com/tomasz-walczyk/${CreateDebianISORepository}/archive/v${CreateDebianISOVersion}.tar.gz") \
+  || Failure "Cannot find ISO file!"
+
+wget 
+
+tomek@debian:~$ tar -xvzf v0.0.4.tar.gz
+create-debian-iso-0.0.4/
+create-debian-iso-0.0.4/.gitignore
+create-debian-iso-0.0.4/CreateDebianISO.ps1
+create-debian-iso-0.0.4/LICENSE
+create-debian-iso-0.0.4/README.md
+create-debian-iso-0.0.4/create-debian-iso.bash
+create-debian-iso-0.0.4/data/
+create-debian-iso-0.0.4/data/debian.seed
+create-debian-iso-0.0.4/data/iso/
+create-debian-iso-0.0.4/data/iso/boot/
+create-debian-iso-0.0.4/data/iso/boot/grub/
+create-debian-iso-0.0.4/data/iso/boot/grub/grub.cfg
+create-debian-iso-0.0.4/data/iso/isolinux/
+create-debian-iso-0.0.4/data/iso/isolinux/isolinux.cfg
+create-debian-iso-0.0.4/data/mkisofs/
+create-debian-iso-0.0.4/data/mkisofs/mkisofs.exe
+create-debian-iso-0.0.4/data/mkisofs/mkisofs.pdf
+
+
+#----------------------------------------------------------
+
 CheckIfNotEmpty() {
   [[ -z "${1+x}" ]] && Failure "Identifier is required!"
   [[ -z "${2}" ]] && Failure "Invalid argument: \"${2}\" : Empty value!"
@@ -283,6 +317,11 @@ SourceURL=${SourceURL:-""}
 ISONamePattern=${ISONamePattern:-""}
 BootFlags=${BootFlags:-""}
 Encrypt=${Encrypt:-0}
+
+#----------------------------------------------------------
+# Download dependencies from GitHub.
+#----------------------------------------------------------
+
 
 # #----------------------------------------------------------
 # # Define all needed files and directories.
