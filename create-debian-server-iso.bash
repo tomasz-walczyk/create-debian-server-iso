@@ -75,6 +75,100 @@ Clean() {
 
 #----------------------------------------------------------
 
+CheckIfNotEmpty() {
+  [[ -z "${1+x}" ]] && Failure "Identifier is required!"
+  [[ -z "${2}" ]] && Failure "Invalid argument: \"${2}\" : Empty value!"
+  echo -n "${2}"
+}
+
+#----------------------------------------------------------
+
+ValidateSSHKeyPassword() {
+  local Password=$(CheckIfNotEmpty "$@")
+  if [[ ${#Password} -lt ${MinimumPasswordLength} ]]; then
+    if [[ "${Password}" != "RAND" ]] && [[ "${Password}" != "READ" ]] && [[ "${Password}" != "NONE" ]]; then
+      Failure "Invalid argument: \"${1}\" : Password is too short!"
+    fi
+  elif [[ ${#2} -gt ${MaximumPasswordLength} ]]; then
+    Failure "Invalid argument: \"${1}\" : Password is too long!"
+  fi
+  echo -n "${Password}"
+}
+
+#----------------------------------------------------------
+
+ValidateAccountPassword() {
+  local Password=$(CheckIfNotEmpty "$@")
+  if [[ ${#Password} -lt ${MinimumPasswordLength} ]]; then
+    if [[ "${Password}" != "RAND" ]] && [[ "${Password}" != "READ" ]]; then
+      Failure "Invalid argument: \"${1}\" : Password is too short!"
+    fi
+  elif [[ ${#2} -gt ${MaximumPasswordLength} ]]; then
+    Failure "Invalid argument: \"${1}\" : Password is too long!"
+  fi
+  echo -n "${Password}"
+}
+
+#----------------------------------------------------------
+
+ValidateHostname() {
+  local Hostname=$(CheckIfNotEmpty "$@")
+  local Pattern="^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$"
+  (echo -n "${Hostname}" | grep --extended-regexp "${Pattern}" &> /dev/null) \
+    || Failure "Invalid argument: \"${1}\" : Hostname: \"${Hostname}\" does not match pattern: \"${Pattern}\""
+
+  echo -n "${Hostname}"
+}
+
+#----------------------------------------------------------
+
+ValidateDomain() {
+  local Domain=$(CheckIfNotEmpty "$@")
+  local Pattern="^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]$"
+  (echo -n "${Domain}" | grep --extended-regexp "${Pattern}" &> /dev/null) \
+    || Failure "Invalid argument: \"${1}\" : Domain: \"${Domain}\" does not match pattern: \"${Pattern}\""
+
+  echo -n "${Domain}"
+}
+
+#----------------------------------------------------------
+
+ValidateOutputDir() {
+  local Path=$(CheckIfNotEmpty "$@")
+  if [[ "${Path:0:1}" != "/" ]]; then
+    local Path="${PWD}/${Path}"
+  fi
+
+  if [[ -e "${Path}" ]]; then
+    [[ ! -d "${Path}" ]] && Failure "Invalid argument: \"${1}\" : File \"${Path}\" already exists!"
+    [[ ! -z "$(ls -A "${Path}")" ]] && Failure "Invalid argument: \"${1}\" : Directory \"${Path}\" is not empty!"
+    [[ ! -w "${Path}" ]] && Failure "Invalid argument: \"${1}\" : Directory \"${Path}\" is not writable!"
+  else
+    [[ ! -w "$(dirname "${Path}")" ]] && Failure "Invalid argument: \"${1}\" : Directory \"$(dirname "${Path}")\" is not writable!"
+  fi
+  echo -n "${Path}"
+}
+
+#----------------------------------------------------------
+
+ValidateSourceURL() {
+  CheckIfNotEmpty "$@"
+}
+
+#----------------------------------------------------------
+
+ValidateISONamePattern() {
+  CheckIfNotEmpty "$@"
+}
+
+#----------------------------------------------------------
+
+ValidateBootFlags() {
+  CheckIfNotEmpty "$@"
+}
+
+#----------------------------------------------------------
+
 Help() {
 cat << EndOfHelp
 Synopsis:
@@ -91,143 +185,32 @@ Usage:
 ${ScriptName} [OPTION]...
 
 Options:
--k|--key-password     <string>  Root SSH key password.
-                                Supported values:
-                                - RAND) : Generate random password.
-                                - READ) : Read password from standard input.
-                                - NONE) : Private key will not be encrypted.
-                                - *)    : Use argument value as a password.
-
--a|--account-password <string>  Root account password.
-                                Available options:
-                                - RAND) : Generate random password.
-                                - READ) : Read password from standard input.
-                                - *)    : Use argument value as a password.
-
--e|--encrypt                    Enable full disk encryption.
--h|--hostname         <string>  Server hostname.
--d|--domain           <string>  Server domain.
--o|--output-dir       <string>  Path to the output directory.
--s|--source-url       <string>  Source URL from where ISO should be downloaded.
--i|--iso-name-pattern <string>  Regular expression for selecting ISO file.
--b|--boot-flags       <string>  Additional installer boot flags.
-
-   --help                       Display this help and exit.
+--ssh-key-password <string> : SSH private key password.
+                            : Supported values:
+                            : - RAND) : Generate random password.
+                            : - READ) : Read password from standard input.
+                            : - NONE) : Private key will not be encrypted.
+                            : - *)    : Use argument value as a password.
+                            :
+--account-password <string> : Account password.
+                            : Available options:
+                            : - RAND) : Generate random password.
+                            : - READ) : Read password from standard input.
+                            : - *)    : Use argument value as a password.
+                            :
+--hostname         <string> : Server hostname.
+--domain           <string> : Server domain.
+--output-dir       <string> : Path to the output directory.
+--source-url       <string> : Source URL from where ISO should be downloaded.
+--iso-name-pattern <string> : Regular expression for selecting ISO file.
+--boot-flags       <string> : Additional installer boot flags.
+--encrypt                   : Enable full disk encryption.
+--help                      : Display this help and exit.
 
 $Related links):
 - https://github.com/tomasz-walczyk/create-debian-server-iso
 - https://github.com/tomasz-walczyk/create-debian-iso
 EndOfHelp
-}
-
-#----------------------------------------------------------
-
-ValidateKeyPassword() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-
-  if [[ ${#2} -gt 0 ]] && [[ ${#2} -lt ${MinimumPasswordLength} ]]; then
-    if [[ "${2}" != "RAND" ]] && [[ "${2}" != "READ" ]] && [[ "${2}" != "NONE" ]]; then
-      Failure "Invalid argument: ${1} : Password is too short! (minimum ${MinimumPasswordLength} characters)"
-    fi
-  elif [[ ${#2} -gt ${MaximumPasswordLength} ]]; then
-    Failure "Invalid argument: ${1} : Password is too long! (maximum ${MaximumPasswordLength} characters)"
-  fi
-
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateAccountPassword() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-
-  if [[ ${#2} -gt 0 ]] && [[ ${#2} -lt ${MinimumPasswordLength} ]]; then
-    if [[ "${2}" != "RAND" ]] && [[ "${2}" != "READ" ]]; then
-      Failure "Invalid argument: ${1} : Password is too short! (minimum ${MinimumPasswordLength} characters)"
-    fi
-  elif [[ ${#2} -gt ${MaximumPasswordLength} ]]; then
-    Failure "Invalid argument: ${1} : Password is too long! (maximum ${MaximumPasswordLength} characters)"
-  fi
-
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateHostname() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-
-  local Pattern="^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$"
-  (echo -n "${2}" | grep --extended-regexp "${Pattern}" &> /dev/null) \
-    || Failure "Invalid argument: ${1} : Value: \"${2}\" does not match pattern: \"${Pattern}\""
-
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateDomain() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-
-  local Pattern="^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]$"
-  (echo -n "${2}" | grep --extended-regexp "${Pattern}" &> /dev/null) \
-    || Failure "Invalid argument: ${1} : Value: \"${2}\" does not match pattern: \"${Pattern}\""
-
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateOutputDir() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-
-  if [[ "${2:0:1}" != "/" ]]; then
-    local Path="${PWD}/${2}"
-  else
-    local Path=${2}
-  fi
-
-  if [[ -e "${Path}" ]]; then
-    if [[ -d "${Path}" ]]; then
-      [[ -z "$(ls -A "${Path}")" ]] || Failure "Invalid argument: ${1} : Directory \"${Path}\" is not empty!"
-      [[ -w "${Path}" ]] || Failure "Invalid argument: ${1} : Directory \"${Path}\" is not writable!"
-    else
-      Failure "Invalid argument: ${1} : Item \"${Path}\" already exists!"
-    fi
-  else
-    [[ -w "$(dirname "${Path}")" ]] || Failure "Invalid argument: ${1} : Directory \"$(dirname "${Path}")\" is not writable!"
-  fi
-
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateSourceURL() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateISONamePattern() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-  echo -n "${2}"
-}
-
-#----------------------------------------------------------
-
-ValidateBootFlags() {
-  [[ -z "${1+x}" ]] && Failure "Argument name is required!"
-  [[ -z "${2}" ]] && Failure "Missing argument value: ${1}"
-  echo -n "${2}"
 }
 
 ###########################################################
@@ -244,17 +227,29 @@ trap Failure HUP INT QUIT TERM
 while [[ ${#} -gt 0 ]]
 do
 case "${1}" in
-  -e|--encrypt) Encrypt=1;;
-  -k|--key-password) KeyPassword=$(ValidateKeyPassword "${1}" "${2:-""}"); shift;;
-  -a|--account-password) AccountPassword=$(ValidateAccountPassword "${1}" "${2:-""}"); shift;;
-  -h|--hostname) Hostname=$(ValidateHostname "${1}" "${2:-""}"); shift;;
-  -d|--domain) Domain=$(ValidateDomain "${1}" "${2:-""}"); shift;;
-  -o|--output-dir) OutputDir=$(ValidateOutputDir "${1}" "${2:-""}"); shift;;
-  -s|--source-url) SourceURL=$(ValidateSourceURL "${1}" "${2:-""}"); shift;;
-  -i|--iso-name-pattern) ISONamePattern=$(ValidateISONamePattern "${1}" "${2:-""}"); shift;;
-  -b|--boot-flags) BootFlags=$(ValidateBootFlags "${1}" "${2:-""}"); shift;;
+  --ssh-key-password=*) SSHKeyPassword=$(ValidateSSHKeyPassword "${1%%=*}" "${1#*=}"); shift;;
+  --account-password=*) AccountPassword=$(ValidateAccountPassword "${1%%=*}" "${1#*=}"); shift;;
+  --hostname=*) Hostname=$(ValidateHostname "${1%%=*}" "${1#*=}"); shift;;
+  --domain=*) Domain=$(ValidateDomain "${1%%=*}" "${1#*=}"); shift;;
+  --output-dir=*) OutputDir=$(ValidateOutputDir "${1%%=*}" "${1#*=}"); shift;;
+  --source-url=*) SourceURL=$(ValidateSourceURL "${1%%=*}" "${1#*=}"); shift;;
+  --iso-name-pattern=*) ISONamePattern=$(ValidateISONamePattern "${1%%=*}" "${1#*=}"); shift;;
+  --boot-flags=* BootFlags=$(ValidateBootFlags "${1%%=*}" "${1#*=}"); shift;;
+
+  --ssh-key-password) SSHKeyPassword=$(ValidateSSHKeyPassword "${1}" "${2:-""}"); shift;;
+  --account-password) AccountPassword=$(ValidateAccountPassword "${1}" "${2:-""}"); shift;;
+  --hostname) Hostname=$(ValidateHostname "${1}" "${2:-""}"); shift;;
+  --domain) Domain=$(ValidateDomain "${1}" "${2:-""}"); shift;;
+  --output-dir) OutputDir=$(ValidateOutputDir "${1}" "${2:-""}"); shift;;
+  --source-url) SourceURL=$(ValidateSourceURL "${1}" "${2:-""}"); shift;;
+  --iso-name-pattern) ISONamePattern=$(ValidateISONamePattern "${1}" "${2:-""}"); shift;;
+  --boot-flags) BootFlags=$(ValidateBootFlags "${1}" "${2:-""}"); shift;;
+
+  --encrypt) Encrypt=1;;
   --help) Help; Success;;
-  *) Failure "Invalid argument: \"${1}\"";;
+
+  *=*) Failure "Unsupported argument: \"${1%%=*}\"";;
+  *) Failure "Unsupported argument: \"${1}\"";;
 esac
 shift
 done
@@ -279,17 +274,15 @@ fi
 # Assign default values for missing arguments.
 #----------------------------------------------------------
 
-Encrypt=${Encrypt:=0}
-KeyPassword=${KeyPassword:=""}
-AccountPassword=${AccountPassword:=""}
-Username=${Username:=""}
-Fullname=${Fullname:=${Username}}
-Hostname=${Hostname:=""}
-Domain=${Domain:=""}
-OutputDir=${OutputDir:="${ScriptRoot}/$(date "+debian-server_%Y-%m-%d_%H-%M-%S")"}
-SourceURL=${SourceURL:=""}
-ISONamePattern=${ISONamePattern:=""}
-BootFlags=${BootFlags:=""}
+SSHKeyPassword=${SSHKeyPassword:-""}
+AccountPassword=${AccountPassword:-""}
+Hostname=${Hostname:-""}
+Domain=${Domain:-""}
+OutputDir=${OutputDir:-"${ScriptRoot}/$(date "+debian-server_%Y-%m-%d_%H-%M-%S")"}
+SourceURL=${SourceURL:-""}
+ISONamePattern=${ISONamePattern:-""}
+BootFlags=${BootFlags:-""}
+Encrypt=${Encrypt:-0}
 
 # #----------------------------------------------------------
 # # Define all needed files and directories.
