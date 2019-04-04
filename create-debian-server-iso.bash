@@ -75,44 +75,29 @@ Clean() {
 
 #----------------------------------------------------------
 
-DownloadDependency() {
-
-}
-CreateDebianISO="v0.0.4"
-CreateDebianISOVersion="0.0.4"
-CreateDebianISORepository="create-debian-iso"
-
-wget --quiet --output-document="${TempDir}" "https://github.com/tomasz-walczyk/${CreateDebianISORepository}/archive/v${CreateDebianISOVersion}.tar.gz") \
-  || Failure "Cannot find ISO file!"
-
-wget 
-
-tomek@debian:~$ tar -xvzf v0.0.4.tar.gz
-create-debian-iso-0.0.4/
-create-debian-iso-0.0.4/.gitignore
-create-debian-iso-0.0.4/CreateDebianISO.ps1
-create-debian-iso-0.0.4/LICENSE
-create-debian-iso-0.0.4/README.md
-create-debian-iso-0.0.4/create-debian-iso.bash
-create-debian-iso-0.0.4/data/
-create-debian-iso-0.0.4/data/debian.seed
-create-debian-iso-0.0.4/data/iso/
-create-debian-iso-0.0.4/data/iso/boot/
-create-debian-iso-0.0.4/data/iso/boot/grub/
-create-debian-iso-0.0.4/data/iso/boot/grub/grub.cfg
-create-debian-iso-0.0.4/data/iso/isolinux/
-create-debian-iso-0.0.4/data/iso/isolinux/isolinux.cfg
-create-debian-iso-0.0.4/data/mkisofs/
-create-debian-iso-0.0.4/data/mkisofs/mkisofs.exe
-create-debian-iso-0.0.4/data/mkisofs/mkisofs.pdf
-
-
-#----------------------------------------------------------
-
 CheckIfNotEmpty() {
   [[ -z "${1+x}" ]] && Failure "Identifier is required!"
   [[ -z "${2}" ]] && Failure "Invalid argument: \"${2}\" : Empty value!"
   echo -n "${2}"
+}
+
+#----------------------------------------------------------
+
+DownloadDependency() {
+  local Dependency=$(CheckIfNotEmpty "" "${1:-""}")
+  local Version=$(CheckIfNotEmpty "" "${2:-""}")
+
+  local DependencyURL="https://github.com/tomasz-walczyk/${Dependency}/archive/v${Version}.tar.gz"
+  local DependencyDir="${TempDir}/${Dependency}-${Version}"
+  local DependencyArchive="${DependencyDir}.tar.gz"
+
+  wget --quiet --output-document="${DependencyArchive}" "${DependencyURL}") \
+    || Failure "Cannot download dependency: \"${DependencyURL}\""
+
+  mkdir --parent "${DependencyDir}"
+  tar --extract --gzip --strip-components=1 --file "${DependencyArchive}" --directory "${DependencyDir}" 
+  rm "${DependencyArchive}"
+  echo -n "${DependencyDir}"
 }
 
 #----------------------------------------------------------
@@ -185,24 +170,6 @@ ValidateOutputDir() {
 
 #----------------------------------------------------------
 
-ValidateSourceURL() {
-  CheckIfNotEmpty "$@"
-}
-
-#----------------------------------------------------------
-
-ValidateISONamePattern() {
-  CheckIfNotEmpty "$@"
-}
-
-#----------------------------------------------------------
-
-ValidateBootFlags() {
-  CheckIfNotEmpty "$@"
-}
-
-#----------------------------------------------------------
-
 Help() {
 cat << EndOfHelp
 Synopsis:
@@ -266,18 +233,18 @@ case "${1}" in
   --hostname=*) Hostname=$(ValidateHostname "${1%%=*}" "${1#*=}"); shift;;
   --domain=*) Domain=$(ValidateDomain "${1%%=*}" "${1#*=}"); shift;;
   --output-dir=*) OutputDir=$(ValidateOutputDir "${1%%=*}" "${1#*=}"); shift;;
-  --source-url=*) SourceURL=$(ValidateSourceURL "${1%%=*}" "${1#*=}"); shift;;
-  --iso-name-pattern=*) ISONamePattern=$(ValidateISONamePattern "${1%%=*}" "${1#*=}"); shift;;
-  --boot-flags=* BootFlags=$(ValidateBootFlags "${1%%=*}" "${1#*=}"); shift;;
+  --source-url=*) SourceURL=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
+  --iso-name-pattern=*) ISONamePattern=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
+  --boot-flags=* BootFlags=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
 
   --ssh-key-password) SSHKeyPassword=$(ValidateSSHKeyPassword "${1}" "${2:-""}"); shift;;
   --account-password) AccountPassword=$(ValidateAccountPassword "${1}" "${2:-""}"); shift;;
   --hostname) Hostname=$(ValidateHostname "${1}" "${2:-""}"); shift;;
   --domain) Domain=$(ValidateDomain "${1}" "${2:-""}"); shift;;
   --output-dir) OutputDir=$(ValidateOutputDir "${1}" "${2:-""}"); shift;;
-  --source-url) SourceURL=$(ValidateSourceURL "${1}" "${2:-""}"); shift;;
-  --iso-name-pattern) ISONamePattern=$(ValidateISONamePattern "${1}" "${2:-""}"); shift;;
-  --boot-flags) BootFlags=$(ValidateBootFlags "${1}" "${2:-""}"); shift;;
+  --source-url) SourceURL=$(CheckIfNotEmpty "${1}" "${2:-""}"); shift;;
+  --iso-name-pattern) ISONamePattern=$(CheckIfNotEmpty "${1}" "${2:-""}"); shift;;
+  --boot-flags) BootFlags=$(CheckIfNotEmpty "${1}" "${2:-""}"); shift;;
 
   --encrypt) Encrypt=1;;
   --help) Help; Success;;
@@ -322,6 +289,7 @@ Encrypt=${Encrypt:-0}
 # Download dependencies from GitHub.
 #----------------------------------------------------------
 
+CreateDebianISODir=$(DownloadDependency "create-debian-iso" "0.0.5")
 
 # #----------------------------------------------------------
 # # Define all needed files and directories.
