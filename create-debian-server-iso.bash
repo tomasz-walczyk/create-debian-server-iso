@@ -84,20 +84,20 @@ CheckIfNotEmpty() {
 #----------------------------------------------------------
 
 DownloadDependency() {
-  local Dependency=$(CheckIfNotEmpty "" "${1:-""}")
-  local Version=$(CheckIfNotEmpty "" "${2:-""}")
+  local Name=$(CheckIfNotEmpty "name" "${1:-""}")
+  local Version=$(CheckIfNotEmpty "version" "${2:-""}")
 
-  local DependencyURL="https://github.com/tomasz-walczyk/${Dependency}/archive/v${Version}.tar.gz"
-  local DependencyDir="${TempDir}/${Dependency}-${Version}"
-  local DependencyArchive="${DependencyDir}.tar.gz"
+  local DownloadURL="https://github.com/tomasz-walczyk/${Name}/archive/v${Version}.tar.gz"
+  local ArchiveFile="${TempDir}/${Name}-v${Version}.tar.gz"
+  local OutputDir="${TempDir}/${Name}-v${Version}"
 
-  wget --quiet --output-document="${DependencyArchive}" "${DependencyURL}") \
-    || Failure "Cannot download dependency: \"${DependencyURL}\""
+  wget --quiet --output-document="${ArchiveFile}" "${DownloadURL}" \
+    || Failure "Cannot download dependency: \"${DownloadURL}\""
 
-  mkdir --parent "${DependencyDir}"
-  tar --extract --gzip --strip-components=1 --file "${DependencyArchive}" --directory "${DependencyDir}" 
-  rm "${DependencyArchive}"
-  echo -n "${DependencyDir}"
+  mkdir --parent "${OutputDir}"
+  tar --extract --gzip --strip-components=1 --file "${ArchiveFile}" --directory "${OutputDir}" 
+  rm "${DownloadPath}"
+  echo -n "${OutputDir}"
 }
 
 #----------------------------------------------------------
@@ -106,10 +106,10 @@ ValidateSSHKeyPassword() {
   local Password=$(CheckIfNotEmpty "$@")
   if [[ ${#Password} -lt ${MinimumPasswordLength} ]]; then
     if [[ "${Password}" != "RAND" ]] && [[ "${Password}" != "READ" ]] && [[ "${Password}" != "NONE" ]]; then
-      Failure "Invalid argument: \"${1}\" : Password is too short!"
+      Failure "Invalid argument: \"${1}\" : Password is too short! (${MinimumPasswordLength} characters is a minimum)"
     fi
   elif [[ ${#2} -gt ${MaximumPasswordLength} ]]; then
-    Failure "Invalid argument: \"${1}\" : Password is too long!"
+    Failure "Invalid argument: \"${1}\" : Password is too long! (${MaximumPasswordLength} characters is a maximum)"
   fi
   echo -n "${Password}"
 }
@@ -120,10 +120,10 @@ ValidateAccountPassword() {
   local Password=$(CheckIfNotEmpty "$@")
   if [[ ${#Password} -lt ${MinimumPasswordLength} ]]; then
     if [[ "${Password}" != "RAND" ]] && [[ "${Password}" != "READ" ]]; then
-      Failure "Invalid argument: \"${1}\" : Password is too short!"
+      Failure "Invalid argument: \"${1}\" : Password is too short! (${MinimumPasswordLength} characters is a minimum)"
     fi
   elif [[ ${#2} -gt ${MaximumPasswordLength} ]]; then
-    Failure "Invalid argument: \"${1}\" : Password is too long!"
+    Failure "Invalid argument: \"${1}\" : Password is too long! (${MaximumPasswordLength} characters is a maximum)"
   fi
   echo -n "${Password}"
 }
@@ -208,7 +208,7 @@ Options:
 --encrypt                   : Enable full disk encryption.
 --help                      : Display this help and exit.
 
-$Related links):
+Related links:
 - https://github.com/tomasz-walczyk/create-debian-server-iso
 - https://github.com/tomasz-walczyk/create-debian-iso
 EndOfHelp
@@ -235,7 +235,7 @@ case "${1}" in
   --output-dir=*) OutputDir=$(ValidateOutputDir "${1%%=*}" "${1#*=}"); shift;;
   --source-url=*) SourceURL=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
   --iso-name-pattern=*) ISONamePattern=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
-  --boot-flags=* BootFlags=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
+  --boot-flags=*) BootFlags=$(CheckIfNotEmpty "${1%%=*}" "${1#*=}"); shift;;
 
   --ssh-key-password) SSHKeyPassword=$(ValidateSSHKeyPassword "${1}" "${2:-""}"); shift;;
   --account-password) AccountPassword=$(ValidateAccountPassword "${1}" "${2:-""}"); shift;;
@@ -291,26 +291,24 @@ Encrypt=${Encrypt:-0}
 
 CreateDebianISODir=$(DownloadDependency "create-debian-iso" "0.0.5")
 
-# #----------------------------------------------------------
-# # Define all needed files and directories.
-# #----------------------------------------------------------
+#----------------------------------------------------------
+# Define all needed files and directories.
+#----------------------------------------------------------
 
-# readonly HostLabel=${Hostname:-"server"}
-# readonly UserLabel=${Username:-"root"}
+readonly ServerLabel=${Hostname:-"server"}
+readonly RootLabel="root@"
 
-# readonly ISOFile="${OutputDir}/${HostLabel}.iso"
-# readonly PreseedFile="${OutputDir}/${HostLabel}.seed"
-# readonly AttachmentDir="${OutputDir}/${HostLabel}"
-# readonly AttachmentFile="${OutputDir}/${HostLabel}.tar.gz"
-# readonly PasswordsFile="${OutputDir}/${UserLabel}@${HostLabel}.pass"
-# readonly PrivateKeyFile="${OutputDir}/${UserLabel}@${HostLabel}"
-# readonly PublicKeyFile="${OutputDir}/${UserLabel}@${HostLabel}.pub"
+readonly ISOFile="${OutputDir}/${ServerLabel}.iso"
+readonly PreseedFile="${OutputDir}/${ServerLabel}.seed"
+readonly AttachmentDir="${OutputDir}/${ServerLabel}"
+readonly AttachmentFile="${OutputDir}/${ServerLabel}.tar.gz"
+readonly PasswordsFile="${OutputDir}/root@${HostLabel}.pass"
+readonly PrivateKeyFile="${OutputDir}/root@${HostLabel}"
+readonly PublicKeyFile="${OutputDir}/root@${HostLabel}.pub"
 
-# #----------------------------------------------------------
-# # Configure output directory.
-# #----------------------------------------------------------
-
-# DirToRemoveOnExit="${OutputDir}"
+#----------------------------------------------------------
+# Configure output directory.
+#----------------------------------------------------------
 
 # if [[ ! -e "${OutputDir}" ]]; then
 #   mkdir --parents "${OutputDir}"
@@ -322,193 +320,177 @@ CreateDebianISODir=$(DownloadDependency "create-debian-iso" "0.0.5")
 #   chmod 700 "${AttachmentDir}"
 # fi
 
-# #----------------------------------------------------------
-# # Configure full disk encryption.
-# #----------------------------------------------------------
+mkdir --parents --mode 700 "${OutputDir}"
+mkdir --parents --mode 700 "${AttachmentDir}"
 
-# if [[ ${Encrypt} -eq 0 ]]; then
-#   cp "${ScriptRoot}/data/debian-server.seed" "${PreseedFile}"
-# else
-#   cp "${ScriptRoot}/data/debian-server-crypt.seed" "${PreseedFile}"
-# fi
+#----------------------------------------------------------
+# Configure full disk encryption.
+#----------------------------------------------------------
 
-# chmod 600 "${PreseedFile}"
+if [[ "${Encrypt:-0}" -eq 0 ]]; then
+  install --mode 600 "${ScriptRoot}/data/debian-server.seed" "${PreseedFile}"
+else
+  install --mode 600 "${ScriptRoot}/data/debian-server-crypt.seed" "${PreseedFile}"
+fi
 
-# #----------------------------------------------------------
-# # Configure hostname.
-# #----------------------------------------------------------
+#----------------------------------------------------------
+# Configure hostname.
+#----------------------------------------------------------
 
-# if [[ -n "${Hostname}" ]]; then
-#   sed --in-place "s/{{HOSTNAME}}/${Hostname}/g" "${PreseedFile}"
-# else
-#   sed --in-place "/{{HOSTNAME}}/d" "${PreseedFile}"
-# fi
+if [[ -n "${Hostname:-""}" ]]; then
+  sed --in-place "s/{{HOSTNAME}}/${Hostname}/g" "${PreseedFile}"
+else
+  sed --in-place "/{{HOSTNAME}}/d" "${PreseedFile}"
+fi
 
-# #----------------------------------------------------------
-# # Configure domain.
-# #----------------------------------------------------------
+#----------------------------------------------------------
+# Configure domain.
+#----------------------------------------------------------
 
-# if [[ -n "${Domain}" ]]; then
-#   sed --in-place "s/{{DOMAIN}}/${Domain}/g" "${PreseedFile}"
-# else
-#   sed --in-place "/{{DOMAIN}}/d" "${PreseedFile}"
-# fi
+if [[ -n "${Domain:-""}" ]]; then
+  sed --in-place "s/{{DOMAIN}}/${Domain}/g" "${PreseedFile}"
+else
+  sed --in-place "/{{DOMAIN}}/d" "${PreseedFile}"
+fi
 
-# #----------------------------------------------------------
-# # Configure account details.
-# #----------------------------------------------------------
+#----------------------------------------------------------
+# Configure account password.
+#----------------------------------------------------------
 
-# if [[ -n "${Username}" ]]; then
-#   sed --in-place "s/{{MAKE_ROOT}}/false/g" "${PreseedFile}"
-#   sed --in-place "s/{{MAKE_USER}}/true/g" "${PreseedFile}"
-#   sed --in-place "s/{{USERNAME}}/${Username}/g" "${PreseedFile}"
-#   sed --in-place "s/{{FULLNAME}}/${Fullname}/g" "${PreseedFile}"
-#   sed --in-place "s/{{USER_PASSWORD}}/{{PASSWORD}}/g" "${PreseedFile}"
-#   sed --in-place "/{{ROOT_PASSWORD}}/d" "${PreseedFile}"
-# else
-#   sed --in-place "s/{{MAKE_ROOT}}/true/g" "${PreseedFile}"
-#   sed --in-place "s/{{MAKE_USER}}/false/g" "${PreseedFile}"
-#   sed --in-place "s/{{ROOT_PASSWORD}}/{{PASSWORD}}/g" "${PreseedFile}"
-#   sed --in-place "/{{USERNAME}}/d" "${PreseedFile}"
-#   sed --in-place "/{{FULLNAME}}/d" "${PreseedFile}"
-#   sed --in-place "/{{USER_PASSWORD}}/d" "${PreseedFile}"
-# fi
+if [[ "${AccountPassword:-""}" == "READ" ]]; then
+  echo ""
+  echo "+-----------------------------------------------+"
+  echo "|         Account password configuration        |"
+  echo "+-----------------------------------------------+"
+  echo ""
 
-# #----------------------------------------------------------
-# # Configure account password.
-# #----------------------------------------------------------
+  while true; do
+    read -s -p "Enter password (empty for no password): " Password1 && echo ""
+    read -s -p "Enter same password again: " Password2 && echo ""
+    if [[ "${Password1}" != "${Password2}" ]]; then
+      echo "Passwords do not match!  Try again."
+    elif [[ ${#Password1} -lt ${MinimumPasswordLength} ]]; then
+      echo "Password is too short! (${MinimumPasswordLength} characters is a minimum) Try again."
+    elif [[ ${#Password1} -gt ${MaximumPasswordLength} ]]; then
+      echo "Password is too long! (${MaximumPasswordLength} characters is a maximum) Try again."
+    else
+      AccountPassword=${Password1}
+      unset Password1
+      unset Password2
+      break
+    fi
+  done
+elif [[ "${AccountPassword}" == "RAND" ]]; then
+  AccountPassword=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${RandomPasswordLength} | head -n 1) || true
+  [[ -f "${PasswordsFile}" ]] && chmod 600 "${PasswordsFile}"
+  echo "Login   : ${AccountPassword}" >> "${PasswordsFile}"
+  chmod 400 "${PasswordsFile}"
+fi
 
-# if [[ "${AccountPassword}" == "READ" ]]; then
-#   echo ""
-#   echo "+-----------------------------------------------+"
-#   echo "|         Account password configuration        |"
-#   echo "+-----------------------------------------------+"
-#   echo ""
+if [[ -n "${AccountPassword}" ]]; then
+  PasswordHash=$(echo "${AccountPassword}" | mkpasswd --stdin --method=sha-512 --rounds=5000)
+  sed --in-place "s:{{PASSWORD}}:${PasswordHash}:g" "${PreseedFile}"
+else
+  sed --in-place "/{{PASSWORD}}/d" "${PreseedFile}"
+fi
 
-#   while true; do
-#     read -s -p "Enter password (empty for no password): " Password1 && echo ""
-#     read -s -p "Enter same password again: " Password2 && echo ""
-#     if [[ "${Password1}" != "${Password2}" ]]; then
-#       echo "Passwords do not match.  Try again."
-#     elif [[ ${#Password1} -gt 0 ]] && [[ ${#Password1} -lt ${MinimumPasswordLength} ]]; then
-#       echo "Password is too short (minimum ${MinimumPasswordLength} characters).  Try again."
-#     elif [[ ${#Password1} -gt ${MaximumPasswordLength} ]]; then
-#       echo "Password is too long (maximum ${MaximumPasswordLength} characters).  Try again."
-#     else
-#       AccountPassword=${Password1}
-#       unset Password1
-#       unset Password2
-#       break
-#     fi
-#   done
-# elif [[ "${AccountPassword}" == "RAND" ]]; then
-#   AccountPassword=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${RandomPasswordLength} | head -n 1) || true
-#   [[ -f "${PasswordsFile}" ]] && chmod 600 "${PasswordsFile}"
-#   echo "Login   : ${AccountPassword}" >> "${PasswordsFile}"
-#   chmod 400 "${PasswordsFile}"
-# fi
+unset AccountPassword
 
-# if [[ -n "${AccountPassword}" ]]; then
-#   PasswordHash=$(echo "${AccountPassword}" | mkpasswd --stdin --method=sha-512 --rounds=5000)
-#   sed --in-place "s:{{PASSWORD}}:${PasswordHash}:g" "${PreseedFile}"
-# else
-#   sed --in-place "/{{PASSWORD}}/d" "${PreseedFile}"
-# fi
+# Password is too short (${MinimumPasswordLength} characters is a minimum)!"
+# Password is too long (${MaximumPasswordLength} characters is a maximum)!"
 
-# unset AccountPassword
+#----------------------------------------------------------
+# Configure remote access.
+#----------------------------------------------------------
 
-# #----------------------------------------------------------
-# # Configure remote access.
-# #----------------------------------------------------------
+if [[ "${KeyPassword}" == "READ" ]]; then
+  echo ""
+  echo "+-----------------------------------------------+"
+  echo "|        SSH key password configuration         |"
+  echo "+-----------------------------------------------+"
+  echo ""
 
-# if [[ "${KeyPassword}" == "READ" ]]; then
-#   echo ""
-#   echo "+-----------------------------------------------+"
-#   echo "|        SSH key password configuration         |"
-#   echo "+-----------------------------------------------+"
-#   echo ""
+  while true; do
+    if ssh-keygen -q -t ${SSHKeyType} -b ${SSHKeyBits} -f "${PrivateKeyFile}" -C "${UserLabel}@${HostLabel}" 2> /dev/null; then
+      chmod 400 "${PrivateKeyFile}" "${PublicKeyFile}"
+      cp "${PublicKeyFile}" ${AttachmentDir}
+      break
+    else
+      echo "Password is too short (minimum ${MinimumPasswordLength} characters).  Try again."
+    fi
+  done
+elif [[ -n "${KeyPassword}" ]]; then
+  if [[ "${KeyPassword}" == "RAND" ]]; then
+    KeyPassword=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${RandomPasswordLength} | head -n 1) || true
+    [[ -f "${PasswordsFile}" ]] && chmod 600 "${PasswordsFile}"
+    echo "SSH Key : ${KeyPassword}" >> "${PasswordsFile}"
+    chmod 400 "${PasswordsFile}"
+  elif [[ "${KeyPassword}" == "NONE" ]]; then
+    KeyPassword=""
+  fi
 
-#   while true; do
-#     if ssh-keygen -q -t ${SSHKeyType} -b ${SSHKeyBits} -f "${PrivateKeyFile}" -C "${UserLabel}@${HostLabel}" 2> /dev/null; then
-#       chmod 400 "${PrivateKeyFile}" "${PublicKeyFile}"
-#       cp "${PublicKeyFile}" ${AttachmentDir}
-#       break
-#     else
-#       echo "Password is too short (minimum ${MinimumPasswordLength} characters).  Try again."
-#     fi
-#   done
-# elif [[ -n "${KeyPassword}" ]]; then
-#   if [[ "${KeyPassword}" == "RAND" ]]; then
-#     KeyPassword=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${RandomPasswordLength} | head -n 1) || true
-#     [[ -f "${PasswordsFile}" ]] && chmod 600 "${PasswordsFile}"
-#     echo "SSH Key : ${KeyPassword}" >> "${PasswordsFile}"
-#     chmod 400 "${PasswordsFile}"
-#   elif [[ "${KeyPassword}" == "NONE" ]]; then
-#     KeyPassword=""
-#   fi
+  ssh-keygen -q -t ${SSHKeyType} -b ${SSHKeyBits} -N "${KeyPassword}" -f "${PrivateKeyFile}" -C "${UserLabel}@${HostLabel}"
+  chmod 400 "${PrivateKeyFile}" "${PublicKeyFile}"
+  cp "${PublicKeyFile}" ${AttachmentDir}
+fi
 
-#   ssh-keygen -q -t ${SSHKeyType} -b ${SSHKeyBits} -N "${KeyPassword}" -f "${PrivateKeyFile}" -C "${UserLabel}@${HostLabel}"
-#   chmod 400 "${PrivateKeyFile}" "${PublicKeyFile}"
-#   cp "${PublicKeyFile}" ${AttachmentDir}
-# fi
+unset KeyPassword
 
-# unset KeyPassword
+#----------------------------------------------------------
+# Configure setup script.
+#----------------------------------------------------------
 
-# #----------------------------------------------------------
-# # Configure setup script.
-# #----------------------------------------------------------
+cp "${ScriptRoot}/data/setup.sh" "${AttachmentDir}"
+chmod 500 "${AttachmentDir}/setup.sh"
 
-# cp "${ScriptRoot}/data/setup.sh" "${AttachmentDir}"
-# chmod 500 "${AttachmentDir}/setup.sh"
+#----------------------------------------------------------
+# Calculate attachments checksums.
+#----------------------------------------------------------
 
-# #----------------------------------------------------------
-# # Calculate attachments checksums.
-# #----------------------------------------------------------
+pushd "${AttachmentDir}"
+sha512sum * > SHA512SUMS
+chmod 400 SHA512SUMS
+popd
 
-# pushd "${AttachmentDir}"
-# sha512sum * > SHA512SUMS
-# chmod 400 SHA512SUMS
-# popd
+#----------------------------------------------------------
+# Create attachments archive.
+#----------------------------------------------------------
 
-# #----------------------------------------------------------
-# # Create attachments archive.
-# #----------------------------------------------------------
+pushd "${AttachmentDir}"
+tar --create --gzip --file="${AttachmentFile}" *
+popd
 
-# pushd "${AttachmentDir}"
-# tar --create --gzip --file="${AttachmentFile}" *
-# popd
+rm --recursive "${AttachmentDir}"
+chmod 400 "${PreseedFile}" "${AttachmentFile}"
 
-# rm --recursive "${AttachmentDir}"
-# chmod 400 "${PreseedFile}" "${AttachmentFile}"
+#----------------------------------------------------------
+# Create debian server ISO.
+#----------------------------------------------------------
 
-# #----------------------------------------------------------
-# # Create debian server ISO.
-# #----------------------------------------------------------
+echo ""
+echo "+-----------------------------------------------+"
+echo "|           Creating server installer           |"
+echo "+-----------------------------------------------+"
+echo ""
 
-# echo ""
-# echo "+-----------------------------------------------+"
-# echo "|           Creating server installer           |"
-# echo "+-----------------------------------------------+"
-# echo ""
+CreateDebianISO="bash \"${CreateDebianISODir}/create-debian-iso.bash\""
+CreateDebianISO+=" --preseed-file \"${PreseedFile}\""
+CreateDebianISO+=" --attachment-file \"${AttachmentFile}\""
+CreateDebianISO+=" --output-file \"${ISOFile}\""
+[[ -n "${SourceURL:-""}" ]] && CreateDebianISO+=" --source-url \"${SourceURL}\""
+[[ -n "${ISONamePattern:-""}" ]] && CreateDebianISO+=" --iso-name-pattern \"${ISONamePattern}\""
+[[ -n "${BootFlags:-""}" ]] && CreateDebianISO+=" --boot-flags \"${BootFlags}\""
+eval "${CreateDebianISO}"
+chmod 400 "${ISOFile}"
 
-# CreateDebianISO="bash \"${ScriptRoot}/data/create-debian-iso/create-debian-iso.bash\""
-# CreateDebianISO+=" --preseed-file \"${PreseedFile}\""
-# CreateDebianISO+=" --attachment-file \"${AttachmentFile}\""
-# CreateDebianISO+=" --output-file \"${ISOFile}\""
-# [[ -n "${SourceURL}" ]] && CreateDebianISO+=" --source-url \"${SourceURL}\""
-# [[ -n "${BootFlags}" ]] && CreateDebianISO+=" --boot-flags \"${BootFlags}\""
-# [[ -n "${ISONamePattern}" ]] && CreateDebianISO+=" --iso-name-pattern \"${ISONamePattern}\""
-# eval "${CreateDebianISO}"
-# chmod 400 "${ISOFile}"
+#----------------------------------------------------------
+# Calculate output files checksums.
+#----------------------------------------------------------
 
-# #----------------------------------------------------------
-# # Calculate output files checksums.
-# #----------------------------------------------------------
+pushd "${OutputDir}"
+sha512sum * > SHA512SUMS
+chmod 400 SHA512SUMS
+popd
 
-# pushd "${OutputDir}"
-# sha512sum * > SHA512SUMS
-# chmod 400 SHA512SUMS
-# popd
-
-# chmod 500 "${OutputDir}"
-# unset DirToRemoveOnExit
+chmod 500 "${OutputDir}"
+unset DirToRemoveOnExit
